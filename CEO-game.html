@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find the Cheating Couple! (Animated Stick Figures)</title>
+    <!-- Google Font for a retro game feel -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* CSS Variables for easy customization */
+        :root {
+            --magnifier-size: 150px; /* Size of the magnifier circle */
+            --zoom-level: 2.5;      /* How much the magnifier zooms in (e.g., 2.5x original size) */
+            --stadium-aspect-ratio: 66.66%; /* 3:2 aspect ratio for canvas (e.g., 1200x800) */
+        }
+
+        /* Basic Body Styling */
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Press Start 2P', cursive;
+            background-color: #1a1a2e; /* Dark background for concert feel */
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden; /* Prevent scrollbars from magnifier movement */
+            text-align: center;
+        }
+
+        /* Game Container */
+        .game-container {
+            background-color: #2a2a4a; /* Slightly lighter dark background */
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
+            max-width: 1000px;
+            width: 100%;
+            position: relative;
+            box-sizing: border-box; /* Include padding in element's total width and height */
+        }
+
+        /* Game Title */
+        h1 {
+            color: #6a0572; /* Purple-ish title color */
+            margin-bottom: 20px;
+            font-size: clamp(1.2em, 3vw, 2.5em); /* Responsive font size */
+            text-shadow: 2px 2px 5px rgba(0,0,0,0.7);
+        }
+
+        /* Instructions */
+        .instructions {
+            font-size: clamp(0.7em, 1.5vw, 1em);
+            margin-top: 20px;
+            color: #b0b0b0;
+        }
+
+        /* Stadium Area - where the game happens */
+        .stadium-area {
+            position: relative;
+            width: 100%;
+            padding-bottom: var(--stadium-aspect-ratio); /* Maintain aspect ratio for canvas parent */
+            background-color: #000; /* Fallback background */
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            user-select: none; /* Prevent text selection */
+            touch-action: none; /* Prevent default touch actions like scrolling/zooming */
+        }
+
+        /* Canvas for drawing the crowd and couple */
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: none; /* Hide default cursor to show only magnifier */
+        }
+
+        /* Magnifier */
+        .magnifier {
+            position: absolute;
+            border: 4px solid #fff; /* White border for the magnifier lens */
+            border-radius: 50%; /* Make it circular */
+            cursor: none; /* Hide default cursor */
+            width: var(--magnifier-size);
+            height: var(--magnifier-size);
+            pointer-events: none; /* Allows clicks to pass through to elements below */
+            opacity: 0; /* Hidden initially, shown on mouseenter */
+            transform: translate(-50%, -50%); /* Center the magnifier div on the cursor */
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5); /* Soft glow */
+            transition: opacity 0.3s ease-out;
+            z-index: 5; /* Above canvas, below messages */
+            background-color: rgba(0,0,0,0.1); /* Slight tint inside */
+            overflow: hidden; /* Hide overflow from internal canvas */
+        }
+
+        #magnifierCanvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* Message Overlay (for win/lose screen) */
+        .message-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9); /* Dark semi-transparent overlay */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10; /* On top of everything */
+            opacity: 0; /* Hidden by default */
+            pointer-events: none; /* Allows interaction when hidden */
+            transition: opacity 0.5s ease-in-out; /* Smooth fade in/out */
+            border-radius: 15px;
+        }
+
+        /* Active state for message overlay */
+        .message-overlay.active {
+            opacity: 1;
+            pointer-events: all; /* Blocks interaction with game when active */
+        }
+
+        /* Found Message Text */
+        #foundMessage {
+            color: #ff00ff; /* Bright magenta */
+            font-size: clamp(1.5em, 4vw, 3.5em); /* Responsive font size */
+            text-shadow: 3px 3px 8px #00ffff; /* Cyan glow */
+            animation: bounceIn 1s forwards; /* Animation when message appears */
+            margin-bottom: 30px;
+        }
+
+        /* Restart Button */
+        #restartButton {
+            background-color: #00ffff; /* Bright cyan */
+            color: #1a1a2e; /* Dark text */
+            border: none;
+            padding: 15px 30px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: clamp(0.8em, 2vw, 1.2em); /* Responsive font size */
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 5px 15px rgba(0, 255, 255, 0.4); /* Soft shadow */
+        }
+
+        #restartButton:hover {
+            background-color: #00e6e6; /* Slightly darker cyan on hover */
+            transform: translateY(-3px); /* Lift effect on hover */
+        }
+
+        #restartButton:active {
+            transform: translateY(0); /* Press effect */
+            box-shadow: 0 2px 5px rgba(0, 255, 255, 0.4);
+        }
+
+        /* Keyframe Animation for message */
+        @keyframes bounceIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.1); opacity: 1; }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Media Queries for Responsiveness */
+        @media (max-width: 768px) {
+            :root {
+                --magnifier-size: 100px; /* Smaller magnifier on smaller screens */
+            }
+            .game-container {
+                padding: 15px;
+            }
+            h1 {
+                font-size: 1.8em;
+            }
+            #foundMessage {
+                font-size: 2em;
+            }
+            #restartButton {
+                padding: 10px 20px;
+                font-size: 0.9em;
+            }
+            .instructions {
+                font-size: 0.8em;
+            }
+        }
+
+        @media (max-width: 480px) {
+            :root {
+                --magnifier-size: 80px; /* Even smaller magnifier on mobile */
+            }
+            h1 {
+                font-size: 1.5em;
+            }
+            #foundMessage {
+                font-size: 1.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Find the Cheating Couple!</h1>
+        <div class="stadium-area" id="stadiumArea">
+            <canvas id="gameCanvas"></canvas>
+            <div class="magnifier" id="magnifier">
+                <canvas id="magnifierCanvas"></canvas>
+            </div>
+        </div>
+        <div class="message-overlay" id="messageOverlay">
+            <p id="foundMessage"></p>
+            <button id="restartButton">Play Again</button>
+        </div>
+        <p class="instructions">Use your mouse (or finger on touch devices) to move the magnifier. Click on the couple when you find them!</p>
+    </div>
+
+    <script>
+        // Get references to DOM elements
+        const stadiumArea = document.getElementById('stadiumArea');
+        const gameCanvas = document.getElementById('gameCanvas');
+        const magnifier = document.getElementById('magnifier');
+        const magnifierCanvas = document.getElementById('magnifierCanvas');
+        const messageOverlay = document.getElementById('messageOverlay');
+        const foundMessage = document.getElementById('foundMessage');
+        const restartButton = document.getElementById('restartButton');
+
+        const ctx = gameCanvas.getContext('2d');
+        const magCtx = magnifierCanvas.getContext('2d');
+
+        // Dynamic CSS values
+        const magnifierSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--magnifier-size'));
+        const zoomLevel = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--zoom-level'));
+
+        let gameActive = false;
+        let animationFrameId; // To store requestAnimationFrame ID for stopping
+        let crowdFigures = [];
+        let couple = { x: 0, y: 0, width: 0, height: 0, found: false };
+
+        const NUM_CROWD_FIGURES = 400; // Number of stick figures in the crowd
+        const MIN_FIGURE_HEIGHT = 15; // Minimum height for a stick figure
+        const MAX_FIGURE_HEIGHT = 25; // Maximum height for a stick figure (to simulate depth)
+
+        /**
+         * Initializes canvas dimensions based on parent container's size.
+         */
+        function resizeCanvas() {
+            const rect = stadiumArea.getBoundingClientRect();
+            gameCanvas.width = rect.width;
+            gameCanvas.height = rect.height;
+            magnifierCanvas.width = magnifierSize;
+            magnifierCanvas.height = magnifierSize;
+            if (gameActive) {
+                drawScene(); // Redraw immediately on resize
+            }
+        }
+
+        /**
+         * Draws a single stick figure.
+         * @param {CanvasRenderingContext2D} context - The canvas rendering context.
+         * @param {number} x - X coordinate of the figure's base.
+         * @param {number} y - Y coordinate of the figure's base.
+         * @param {number} height - Height of the figure.
+         * @param {string} color - Color of the figure.
+         * @param {number} [swayAngle=0] - Angle for body/arm sway.
+         * @param {number} [armAngleOffset=0] - Offset for arm angle for hugging.
+         */
+        function drawStickFigure(context, x, y, height, color, swayAngle = 0, armAngleOffset = 0) {
+            const headRadius = height * 0.15;
+            const bodyHeight = height * 0.4;
+            const legLength = height * 0.25;
+            const armLength = height * 0.2;
+
+            context.strokeStyle = color;
+            context.lineWidth = 1.5;
+            context.lineCap = 'round';
+
+            // Head
+            context.beginPath();
+            context.arc(x, y - height + headRadius, headRadius, 0, Math.PI * 2);
+            context.stroke();
+
+            // Body
+            const bodyTopY = y - height + headRadius * 2;
+            const bodyBottomY = bodyTopY + bodyHeight;
+            context.beginPath();
+            context.moveTo(x, bodyTopY);
+            context.lineTo(x + Math.sin(swayAngle) * (bodyHeight / 4), bodyBottomY); // Subtle sway
+            context.stroke();
+
+            // Arms (simple lines from shoulder area)
+            const shoulderY = bodyTopY + headRadius;
+            context.beginPath();
+            // Left arm
+            context.moveTo(x, shoulderY);
+            context.lineTo(x - armLength * Math.cos(swayAngle + armAngleOffset), shoulderY + armLength * Math.sin(swayAngle + armAngleOffset));
+            // Right arm
+            context.moveTo(x, shoulderY);
+            context.lineTo(x + armLength * Math.cos(swayAngle - armAngleOffset), shoulderY + armLength * Math.sin(swayAngle - armAngleOffset));
+            context.stroke();
+
+            // Legs
+            context.beginPath();
+            // Left leg
+            context.moveTo(x + Math.sin(swayAngle) * (bodyHeight / 4), bodyBottomY);
+            context.lineTo(x - legLength / 2, y);
+            // Right leg
+            context.moveTo(x + Math.sin(swayAngle) * (bodyHeight / 4), bodyBottomY);
+            context.lineTo(x + legLength / 2, y);
+            context.stroke();
+        }
+
+        /**
+         * Creates initial crowd stick figures with random properties.
+         */
+        function createCrowdFigures() {
+            crowdFigures = [];
+            for (let i = 0; i < NUM_CROWD_FIGURES; i++) {
+                const height = MIN_FIGURE_HEIGHT + Math.random() * (MAX_FIGURE_HEIGHT - MIN_FIGURE_HEIGHT);
+                crowdFigures.push({
+                    x: Math.random() * gameCanvas.width,
+                    y: gameCanvas.height - (Math.random() * gameCanvas.height * 0.7), // Concentrate closer to bottom for stadium tiers
+                    height: height,
+                    color: `hsl(${Math.random() * 360}, 30%, ${40 + Math.random() * 20}%)`, // Muted colors
+                    swayOffset: Math.random() * Math.PI * 2, // For subtle swaying
+                });
+            }
+        }
+
+        /**
+         * Draws the stadium background.
+         */
+        function drawStadiumBackground(context) {
+            context.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+            // Dark background for night concert
+            const gradient = context.createLinearGradient(0, 0, 0, gameCanvas.height);
+            gradient.addColorStop(0, '#100c19'); // Dark top
+            gradient.addColorStop(0.5, '#08060d'); // Even darker mid
+            gradient.addColorStop(1, '#050308'); // Very dark bottom
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+            // Draw stadium tiers/sections
+            context.fillStyle = '#1a1a1a'; // Dark grey for tiers
+            context.strokeStyle = '#333333';
+            context.lineWidth = 1;
+
+            const numTiers = 4;
+            for (let i = 0; i < numTiers; i++) {
+                const tierHeight = gameCanvas.height / (numTiers * 1.5);
+                const tierY = gameCanvas.height - (tierHeight * (i + 1));
+                context.beginPath();
+                context.rect(0, tierY, gameCanvas.width, tierHeight);
+                context.fill();
+                context.stroke();
+            }
+
+            // Simple "stage" at the bottom
+            context.fillStyle = '#0f0f0f';
+            context.fillRect(0, gameCanvas.height * 0.9, gameCanvas.width, gameCanvas.height * 0.1);
+
+            // Simulate distant lights/screen
+            context.fillStyle = '#330066'; // Purple light
+            context.beginPath();
+            context.arc(gameCanvas.width * 0.5, gameCanvas.height * 0.1, gameCanvas.width * 0.1, 0, Math.PI * 2);
+            context.fill();
+            context.fillStyle = '#003366'; // Blue light
+            context.beginPath();
+            context.arc(gameCanvas.width * 0.2, gameCanvas.height * 0.05, gameCanvas.width * 0.05, 0, Math.PI * 2);
+            context.fill();
+            context.beginPath();
+            context.arc(gameCanvas.width * 0.8, gameCanvas.height * 0.05, gameCanvas.width * 0.05, 0, Math.PI * 2);
+            context.fill();
+        }
+
+        /**
+         * Draws all crowd figures on the main canvas.
+         * @param {number} timestamp - Current time for animation.
+         */
+        function drawCrowdFigures(timestamp) {
+            crowdFigures.forEach(p => {
+                // Each crowd figure has a subtle sway animation
+                const swayAngle = Math.sin(timestamp * 0.003 + p.swayOffset) * 0.1;
+                drawStickFigure(ctx, p.x, p.y, p.height, p.color, swayAngle);
+            });
+        }
+
+        /**
+         * Draws the animated couple on the main canvas.
+         * This function draws two stick figures hugging each other.
+         * @param {number} timestamp - Current time for animation.
+         */
+        function drawCouple(timestamp) {
+            const baseHeight = couple.height;
+            const baseWidth = couple.width;
+
+            // Subtle animation for couple (e.g., slight pulse)
+            const pulseScale = 1 + Math.sin(timestamp * 0.008) * 0.02;
+
+            // Colors change when found for visual feedback
+            const p1Color = couple.found ? '#FF00FF' : 'rgba(200, 50, 200, 0.7)'; // Bright Magenta if found, muted otherwise
+            const p2Color = couple.found ? '#00FFFF' : 'rgba(50, 200, 200, 0.7)'; // Bright Cyan if found, muted otherwise
+
+            const swayAngle = Math.sin(timestamp * 0.005) * 0.08; // Gentle collective sway
+
+            // Person 1 (left stick figure)
+            const p1x = couple.x + (baseWidth * 0.25);
+            const p1y = couple.y + baseHeight * 0.95; // Base Y position adjusted for bottom-up drawing
+            // The last argument (Math.PI / 4) is the armAngleOffset for a hugging pose
+            drawStickFigure(ctx, p1x, p1y, baseHeight * pulseScale, p1Color, swayAngle, Math.PI / 4);
+
+            // Person 2 (right stick figure), slightly overlapping and offset for hugging
+            const p2x = couple.x + (baseWidth * 0.75);
+            const p2y = couple.y + baseHeight * 0.95; // Base Y position adjusted
+            // The last argument (-Math.PI / 4) is the armAngleOffset for a hugging pose, opposite to the first person
+            drawStickFigure(ctx, p2x, p2y, baseHeight * pulseScale, p2Color, -swayAngle, -Math.PI / 4);
+
+            // If found, draw a glowing circle around them for emphasis
+            if (couple.found) {
+                ctx.beginPath();
+                ctx.arc(couple.x + couple.width / 2, couple.y + couple.height / 2,
+                        Math.max(couple.width, couple.height) / 1.5, 0, Math.PI * 2);
+                ctx.strokeStyle = '#FFFF00'; // Yellow glow
+                ctx.lineWidth = 5;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#FFFF00';
+                ctx.stroke();
+                ctx.shadowBlur = 0; // Reset shadow
+            }
+        }
+
+        /**
+         * Positions the couple randomly within the canvas.
+         */
+        function positionCoupleRandomly() {
+            // Couple size will be slightly larger than average crowd figure for slight visibility
+            couple.height = MAX_FIGURE_HEIGHT * 1.2;
+            couple.width = couple.height * 1; // Approx width for two figures
+
+            // Ensure couple is fully within bounds and not too close to edges
+            couple.x = Math.random() * (gameCanvas.width - couple.width - (couple.width * 0.5)) + (couple.width * 0.25);
+            couple.y = (gameCanvas.height * 0.5) + Math.random() * (gameCanvas.height * 0.5 - couple.height); // Confine to lower half (audience area)
+
+            couple.found = false; // Reset found status for new game
+        }
+
+        /**
+         * Main drawing loop. Uses requestAnimationFrame for smooth animation.
+         * @param {number} timestamp - Current time from requestAnimationFrame.
+         */
+        function drawScene(timestamp = 0) {
+            drawStadiumBackground(ctx); // Draw static background
+            drawCrowdFigures(timestamp); // Draw animated crowd figures
+            drawCouple(timestamp); // Draw animated couple figures
+
+            if (gameActive) {
+                animationFrameId = requestAnimationFrame(drawScene);
+            }
+        }
+
+        /**
+         * Updates the magnifier's view by drawing a zoomed-in portion of the main canvas.
+         * @param {number} centerX - X coordinate of the magnifier's center on the main canvas.
+         * @param {number} centerY - Y coordinate of the magnifier's center on the main canvas.
+         */
+        function updateMagnifier(centerX, centerY) {
+            magCtx.clearRect(0, 0, magnifierCanvas.width, magnifierCanvas.height);
+
+            // Calculate the source rectangle from the main canvas to be zoomed
+            const sourceX = centerX - (magnifierCanvas.width / (zoomLevel * 2));
+            const sourceY = centerY - (magnifierCanvas.height / (zoomLevel * 2));
+            const sourceWidth = magnifierCanvas.width / zoomLevel;
+            const sourceHeight = magnifierCanvas.height / zoomLevel;
+
+            // Draw the zoomed-in portion of the main canvas onto the magnifier canvas
+            magCtx.drawImage(
+                gameCanvas,
+                sourceX, sourceY, sourceWidth, sourceHeight,
+                0, 0, magnifierCanvas.width, magnifierCanvas.height
+            );
+        }
+
+        /**
+         * Handles magnifier movement for mouse events.
+         * @param {MouseEvent} e - The mouse event object.
+         */
+        function handleMagnifierMove(e) {
+            if (!gameActive) return;
+
+            const stadiumRect = stadiumArea.getBoundingClientRect();
+            // Calculate mouse position relative to the stadium area
+            const mouseX = e.clientX - stadiumRect.left;
+            const mouseY = e.clientY - stadiumRect.top;
+
+            // Position the magnifier HTML element
+            magnifier.style.left = `${mouseX}px`;
+            magnifier.style.top = `${mouseY}px`;
+
+            // Update the magnifier's internal canvas view
+            updateMagnifier(mouseX, mouseY);
+        }
+
+        /**
+         * Handles magnifier movement for touch events.
+         * @param {TouchEvent} e - The touch event object.
+         */
+        function handleMagnifierMoveTouch(e) {
+            e.preventDefault(); // Prevent page scrolling
+            if (!gameActive || e.touches.length === 0) return;
+
+            const touch = e.touches[0];
+            const stadiumRect = stadiumArea.getBoundingClientRect();
+            const touchX = touch.clientX - stadiumRect.left;
+            const touchY = touch.clientY - stadiumRect.top;
+
+            magnifier.style.left = `${touchX}px`;
+            magnifier.style.top = `${touchY}px`;
+            magnifier.style.opacity = '1'; // Ensure magnifier is visible on touch
+
+            updateMagnifier(touchX, touchY);
+        }
+
+        /**
+         * Handles clicks on the main canvas to find the couple.
+         * This is where the win condition is detected.
+         * @param {MouseEvent} e - The mouse event object.
+         */
+        function handleCanvasClick(e) {
+            if (!gameActive) return;
+
+            const rect = gameCanvas.getBoundingClientRect();
+            // Calculate click position relative to the canvas
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            // Check if click is within couple's bounding box
+            if (clickX >= couple.x && clickX <= couple.x + couple.width &&
+                clickY >= couple.y && clickY <= couple.y + couple.height) {
+                handleFoundCouple(); // Call win function
+            }
+        }
+
+        /**
+         * Handles the game state when the couple is found.
+         * Displays the win message "Found the CEO and HR".
+         */
+        function handleFoundCouple() {
+            if (!gameActive) return;
+
+            gameActive = false; // Deactivate game
+            cancelAnimationFrame(animationFrameId); // Stop animation loop
+            magnifier.style.opacity = '0'; // Hide magnifier
+            gameCanvas.style.cursor = 'default'; // Restore default cursor
+
+            couple.found = true; // Mark couple as found for drawing logic (changes their appearance)
+            drawScene(); // Redraw one last time to show found couple with glow
+
+            // Display the winning message
+            foundMessage.textContent = "Found the CEO and HR!";
+            messageOverlay.classList.add('active'); // Show the message overlay
+
+            // Remove event listeners to stop gameplay interaction
+            stadiumArea.removeEventListener('mousemove', handleMagnifierMove);
+            stadiumArea.removeEventListener('mouseenter', showMagnifier);
+            stadiumArea.removeEventListener('mouseleave', hideMagnifier);
+            stadiumArea.removeEventListener('touchmove', handleMagnifierMoveTouch);
+            stadiumArea.removeEventListener('touchstart', showMagnifier);
+            stadiumArea.removeEventListener('touchend', hideMagnifier);
+            gameCanvas.removeEventListener('click', handleCanvasClick);
+        }
+
+        function showMagnifier() {
+            if (gameActive) magnifier.style.opacity = '1';
+        }
+
+        function hideMagnifier() {
+            magnifier.style.opacity = '0';
+        }
+
+        /**
+         * Resets the game to its initial state and starts a new round.
+         */
+        function startGame() {
+            gameActive = true;
+            messageOverlay.classList.remove('active');
+            gameCanvas.style.cursor = 'none';
+
+            resizeCanvas(); // Ensure canvas is sized correctly
+            createCrowdFigures(); // Recreate crowd figures
+            positionCoupleRandomly(); // Place couple randomly
+            couple.found = false; // Reset couple status
+
+            // Attach event listeners for game interaction
+            stadiumArea.addEventListener('mousemove', handleMagnifierMove);
+            stadiumArea.addEventListener('mouseenter', showMagnifier);
+            stadiumArea.addEventListener('mouseleave', hideMagnifier);
+            stadiumArea.addEventListener('touchmove', handleMagnifierMoveTouch, { passive: false });
+            stadiumArea.addEventListener('touchstart', showMagnifier);
+            stadiumArea.addEventListener('touchend', hideMagnifier);
+            gameCanvas.addEventListener('click', handleCanvasClick);
+
+            animationFrameId = requestAnimationFrame(drawScene); // Start the animation loop
+        }
+
+        // Event listeners for window resize to keep canvas responsive
+        window.addEventListener('resize', resizeCanvas);
+
+        // Initial game start when the page loads
+        startGame();
+
+        // Add event listener to the restart button for playing again
+        restartButton.addEventListener('click', startGame);
+    </script>
+</body>
+</html>
